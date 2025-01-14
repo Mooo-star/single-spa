@@ -61,16 +61,29 @@ export function navigateToUrl(obj) {
   }
 }
 
+/**
+ * 调用捕获的事件监听器。
+ * 该函数用于遍历并调用捕获的事件监听器数组中与特定事件类型匹配的监听器函数。
+ * 它确保在 single-spa 完成应用程序的挂载/卸载后，才调用这些监听器函数。
+ * 
+ * @param {Array} eventArguments - 事件参数数组，通常包含事件对象。
+ */
 export function callCapturedEventListeners(eventArguments) {
+  // 检查 eventArguments 是否存在
   if (eventArguments) {
+    // 获取事件类型
     const eventType = eventArguments[0].type;
+    // 检查事件类型是否在监听列表中
     if (routingEventsListeningTo.indexOf(eventType) >= 0) {
+      // 遍历捕获的事件监听器数组
       capturedEventListeners[eventType].forEach((listener) => {
         try {
+          // 调用监听器函数，并传递事件参数
           // The error thrown by application event listener should not break single-spa down.
           // Just like https://github.com/single-spa/single-spa/blob/85f5042dff960e40936f3a5069d56fc9477fac04/src/navigation/reroute.js#L140-L146 did
           listener.apply(this, eventArguments);
         } catch (e) {
+          // 捕获并延迟抛出监听器函数中的错误，以避免中断 single-spa 的执行
           setTimeout(() => {
             throw e;
           });
@@ -124,14 +137,25 @@ function createPopStateEvent(state, originalMethodName) {
   return evt;
 }
 
+/**
+ * 原始的 replaceState 方法
+ */
 export let originalReplaceState = null;
 
+/**
+ * 是否修补了历史 API 标志
+ */ 
 let historyApiIsPatched = false;
 
-// We patch the history API so single-spa is notified of all calls to pushState/replaceState.
-// We patch addEventListener/removeEventListener so we can capture all popstate/hashchange event listeners,
-// and delay calling them until single-spa has finished mounting/unmounting applications
+
+/**
+ * 我们修补了历史 API，以便 single-spa 能够收到所有对 pushState/replaceState 的调用通知。
+ * 我们修补了 addEventListener/removeEventListener，以便捕获所有 popstate/hashchange 事件监听器， 
+ * 并延迟调用它们，直到 single-spa 完成应用程序的挂载/卸载。
+ * @param {*} opts 
+ */
 export function patchHistoryApi(opts) {
+  // 检查 historyApiIsPatched 变量，如果已经修补过历史 API，则抛出错误，防止重复修补
   if (historyApiIsPatched) {
     throw Error(
       formatErrorMessage(
@@ -142,20 +166,23 @@ export function patchHistoryApi(opts) {
     );
   }
 
-  // True by default, as a performance optimization that reduces
-  // the number of extraneous popstate events
+  /**
+   * 根据传入的 opts 参数设置 urlRerouteOnly 选项，如果没有传入或 opts 中没有 urlRerouteOnly 属性，则默认为 true
+   */
   urlRerouteOnly =
     opts && opts.hasOwnProperty("urlRerouteOnly") ? opts.urlRerouteOnly : true;
 
   historyApiIsPatched = true;
-
+  
+  // 保存原始的 window.history.replaceState 方法，以便后续调用
   originalReplaceState = window.history.replaceState;
 
-  // We will trigger an app change for any routing events.
+  // 添加 hashchange 和 popstate 事件监听器，当这些事件触发时，调用 urlReroute 函数
   window.addEventListener("hashchange", urlReroute);
   window.addEventListener("popstate", urlReroute);
 
   // Monkeypatch addEventListener so that we can ensure correct timing
+  // 修补 window.addEventListener 和 window.removeEventListener 方法，以便捕获所有 popstate/hashchange 事件监听器，并延迟调用它们。
   const originalAddEventListener = window.addEventListener;
   const originalRemoveEventListener = window.removeEventListener;
   window.addEventListener = function (eventName, fn) {
@@ -184,6 +211,7 @@ export function patchHistoryApi(opts) {
     return originalRemoveEventListener.apply(this, arguments);
   };
 
+  // 修补 window.history.pushState 和 window.history.replaceState 方法，以便 single-spa 能够收到所有对 pushState/replaceState 的调用通知。
   window.history.pushState = patchedUpdateState(
     window.history.pushState,
     "pushState"
